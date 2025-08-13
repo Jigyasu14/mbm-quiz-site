@@ -489,13 +489,26 @@
         document.getElementById("applicationForm").addEventListener("submit", handleSubmit);
 
         // Supabase SDK import
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        document.getElementById("applicationForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
 
-        // IMPORTANT: Replace these with your actual Supabase Project URL and Public Anon Key
-        const SUPABASE_URL = 'https://clljwlczkcrpalwedxxq.supabase.co'; // e.g., 'https://abcde12345.supabase.co'
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsbGp3bGN6a2NycGFsd2VkeHhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkxNDgwMjgsImV4cCI6MjA2NDcyNDAyOH0.6u9C0Cx0j3F8cQSILlA56pY4rgb-L18R8ukOxk5Osck'; // e.g., 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        const formData = Object.fromEntries(new FormData(this).entries());
 
-        let supabase = null; // Supabase client instance
+        const response = await fetch('/api/submit-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+    });
+
+        const data = await response.json();
+        if (data.success) {
+            displayMessage("Form submitted successfully!", "success");
+             // you can also trigger Razorpay checkout here if needed
+          } else {
+        displayMessage("Error: " + data.error, "error");
+    }
+    });
+
         let currentSerialNumber = null; // To store the generated serial number
 
         const messageDiv = document.getElementById('message');
