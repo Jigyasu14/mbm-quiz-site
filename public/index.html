@@ -486,28 +486,22 @@
 
 
     <script type="module">
-        document.getElementById("applicationForm").addEventListener("submit", handleSubmit);
+       document.getElementById("applicationForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  const formData = Object.fromEntries(new FormData(this).entries());
+  const res = await fetch('/api/submit-quiz', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(formData)
+  });
+  const data = await res.json();
+  if (data.success) {
+    console.log('Data saved, serial no:', data.serial_number);
+  } else {
+    alert('Error: ' + data.error);
+  }
+});
 
-        // Supabase SDK import
-        document.getElementById("applicationForm").addEventListener("submit", async function (e) {
-        e.preventDefault();
-
-        const formData = Object.fromEntries(new FormData(this).entries());
-
-        const response = await fetch('/api/submit-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-    });
-
-        const data = await response.json();
-        if (data.success) {
-            displayMessage("Form submitted successfully!", "success");
-             // you can also trigger Razorpay checkout here if needed
-          } else {
-        displayMessage("Error: " + data.error, "error");
-    }
-    });
 
         let currentSerialNumber = null; // To store the generated serial number
 
