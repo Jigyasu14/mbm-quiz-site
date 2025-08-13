@@ -1,0 +1,16 @@
+{
+  "name": "mbm-quiz-site",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.55.0",
+    "razorpay": "^2.9.6"
+  }
+}
