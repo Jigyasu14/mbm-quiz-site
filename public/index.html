@@ -237,6 +237,8 @@
         <div class="logo-container">
             <img src="MBM logo.png" alt="Company Logo" onerror="this.onerror=null;this.src='https://placehold.co/70x70/ADD8E6/000000?text=LOGO';">
         </div>
+        <p class="serial-number">Serial Number: <span id="serialNumber">Loading...</span></p>
+
 
         <div id="serialNumberDisplay" class="serial-number"></div>
 <form id="applicationForm" autocomplete="off">
@@ -523,91 +525,32 @@
             }`
             
         }
+        
+async function fetchSerialNumber() {
+  try {
+    const res = await fetch('/api/submit-quiz'); // GET request
+    const json = await res.json();
+
+    if (json.success) {
+      document.getElementById('serialNumber').textContent = json.serial_number;
+    } else {
+      document.getElementById('serialNumber').textContent = 'Error';
+      console.error(json.error);
+    }
+  } catch (err) {
+    document.getElementById('serialNumber').textContent = 'Error';
+    console.error(err);
+  }
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', fetchSerialNumber);
+
+
 
         // Initialize Supabase client
-        function initializeSupabase() {
-            try {
-                if (SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') {
-                    displayMessage("Please replace 'YOUR_SUPABASE_PROJECT_URL' and 'YOUR_SUPABASE_ANON_KEY' in the code with your actual Supabase credentials.", "danger");
-                    submitButton.disabled = true;
-                    return;
-                }
-                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                console.log("Supabase client initialized.");
-                displayMessage("Ready to submit application.", "info");
-                submitButton.disabled = false; // Enable button once initialized
-            } catch (error) {
-                console.error("Error initializing Supabase:", error);
-                displayMessage(`Error initializing Supabase: ${error.message}`, "danger");
-                submitButton.disabled = true;
-            }
-        }
-
-        async function generateSerialNumber() {
-            if (!supabase) {
-                console.error("Supabase not initialized for serial number generation.");
-                return null;
-            }
-
-            try {
-                const { data, error } = await supabase
-                    .from('serial_numbers')
-                    .select('last_serial_number')
-                    .order('id', { ascending: false })
-                    .limit(1);
-
-                if (error) {
-                    throw error;
-                }
-
-                let nextNumber = 1;
-                if (data && data.length > 0) {
-                    const lastNumber = parseInt(data[0].last_serial_number, 10);
-                    if (!isNaN(lastNumber)) {
-                        nextNumber = lastNumber + 1;
-                    }
-                }
-
-                if (nextNumber > 2000) {
-                    displayMessage("Serial number limit (2000) reached. Cannot generate new serial numbers.", "danger");
-                    submitButton.disabled = true;
-                    return null;
-                }
-
-                const formattedSerialNumber = String(nextNumber).padStart(4, '0');
-                return formattedSerialNumber;
-
-            } catch (error) {
-                console.error("Error generating serial number:", error);
-                if (error.message.includes('relation "public.serial_numbers" does not exist')) {
-                    displayMessage("Error: 'serial_numbers' table missing. Please create it in Supabase following the instructions.", "danger");
-                } else {
-                    displayMessage(`Error generating serial number: ${error.message}`, "danger");
-                }
-                submitButton.disabled = true;
-                return null;
-            }
-        }
-
-        async function updateLastSerialNumber(serialNumber) {
-            if (!supabase) {
-                console.error("Supabase not initialized for updating serial number.");
-                return;
-            }
-            try {
-                const { error } = await supabase
-                    .from('serial_numbers')
-                    .upsert({ id: 1, last_serial_number: serialNumber }, { onConflict: 'id' });
-
-                if (error) {
-                    throw error;
-                }
-                console.log(`Last serial number updated to: ${serialNumber}`);
-            } catch (error) {
-                console.error("Error updating last serial number:", error);
-            }
-        }
-
+        
+        
         async function uploadFile(file, bucketName, folderPath) {
             if (!file) return null;
 
@@ -643,222 +586,192 @@
         }
 
         // Function to handle image preview (for both photos and signatures)
-        function handleImagePreview(event, previewId, textSpanId) {
-            const file = event.target.files[0];
-            const previewImage = document.getElementById(previewId);
-            const previewText = document.getElementById(textSpanId);
+        // ---------------- File Previews ----------------
+function handleImagePreview(event, previewId, textSpanId) {
+    const file = event.target.files[0];
+    const previewImage = document.getElementById(previewId);
+    const previewText = document.getElementById(textSpanId);
 
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    previewImage.src = e.target.result;
-                    previewImage.classList.remove('d-none');
-                    if (previewText) previewText.classList.add('d-none'); // Hide text when image is present
-                };
-                reader.readAsDataURL(file);
-            } else {
-                previewImage.src = '#';
-                previewImage.classList.add('d-none');
-                if (previewText) previewText.classList.remove('d-none'); // Show text when no image
-            }
-        }
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImage.src = e.target.result;
+            previewImage.classList.remove('d-none');
+            if (previewText) previewText.classList.add('d-none'); // Hide text
+        };
+        reader.readAsDataURL(file);
+    } else {
+        previewImage.src = '#';
+        previewImage.classList.add('d-none');
+        if (previewText) previewText.classList.remove('d-none'); // Show text
+    }
+}
 
-        async function handleSubmit(event) {
-            event.preventDefault();
+// ---------------- File to Base64 Helper ----------------
+async function fileToBase64(file) {
+    if (!file) return null;
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(",")[1]); // Base64 only
+        reader.onerror = (error) => reject(error);
+    });
+}
 
-            // Ask for confirmation
-            const confirmationMessage = "Are you sure you want to submit this application? This will generate your receipt directly.";
-            if (!confirm(confirmationMessage)) {
-                displayMessage("Submission cancelled.", "info");
-                return;
-            }
+// ---------------- Form Submit Handler ----------------
+async function handleSubmit(event) {
+    event.preventDefault();
 
-            if (!supabase) {
-                displayMessage("Supabase client not initialized. Please check your credentials.", "danger");
-                return;
-            }
+    const confirmationMessage = "Are you sure you want to submit this application? This will generate your receipt directly.";
+    if (!confirm(confirmationMessage)) {
+        displayMessage("Submission cancelled.", "info");
+        return;
+    }
 
-            displayMessage('<span class="spinner"></span> Submitting application...', 'info');
-            submitButton.disabled = true;
+    displayMessage('<span class="spinner"></span> Submitting application...', 'info');
+    submitButton.disabled = true;
 
-            try {
-                currentSerialNumber = await generateSerialNumber();
-                if (!currentSerialNumber) {
-                    throw new Error("Failed to generate serial number. Submission aborted.");
-                }
-                serialNumberDisplay.textContent = `S. No. ${currentSerialNumber}`;
-                await updateLastSerialNumber(currentSerialNumber);
-// Collect form data
-const category = document.querySelector('input[name="category"]:checked').value;
-const examCentre = document.querySelector('input[name="exam_centre"]:checked').value;
+    try {
+        // -------- Collect form data + convert files --------
+        const p1File = document.getElementById('p1_photo').files[0];
+const p1PhotoBase64 = p1File ? await fileToBase64(p1File) : null;
 
-// Participant 1 Data
-const p1Name = document.getElementById('p1_name').value;
-const p1Class = document.getElementById('p1_class').value;
-const p1Dob = document.getElementById('p1_dob').value;
-const p1School = document.getElementById('p1_school').value;
-const p1ParentMob = document.getElementById('p1_parent_mob').value;
-const p1Address = document.getElementById('p1_address').value;
-const p1PhotoFile = document.getElementById('p1_photo').files[0];
-const p1SignatureFile = document.getElementById('p1_signature').files[0];
+const p1SigFile = document.getElementById('p1_signature').files[0];
+const p1SignatureBase64 = p1SigFile ? await fileToBase64(p1SigFile) : null;
 
-// Participant 2 Data
-const p2Name = document.getElementById('p2_name').value;
-const p2Class = document.getElementById('p2_class').value;
-const p2Dob = document.getElementById('p2_dob').value;
-const p2School = document.getElementById('p2_school').value;
-const p2ParentMob = document.getElementById('p2_parent_mob').value;
-const p2Address = document.getElementById('p2_address').value;
-const p2PhotoFile = document.getElementById('p2_photo').files[0];
-const p2SignatureFile = document.getElementById('p2_signature').files[0];
+const p2File = document.getElementById('p2_photo').files[0];
+const p2PhotoBase64 = p2File ? await fileToBase64(p2File) : null;
 
-// Lucky Coupon Data
-const lcP1Name = document.getElementById('lc_p1_name').value;
-const lcP1Mobile = document.getElementById('lc_p1_mobile').value;
-const lcP1FathersName = document.getElementById('lc_p1_fathers_name').value;
-
-const lcP2Name = document.getElementById('lc_p2_name').value;
-const lcP2Mobile = document.getElementById('lc_p2_mobile').value;
-const lcP2FathersName = document.getElementById('lc_p2_fathers_name').value;
-
-// Upload files to Supabase Storage
-// Upload files to Supabase Storage
-const p1PhotoUrl = await uploadFile(p1PhotoFile, 'quiz-contest-files', 'photos/participant_photos/');
-const p1SignatureUrl = await uploadFile(p1SignatureFile, 'quiz-contest-files', 'signatures/participant_signatures/');
-const p2PhotoUrl = await uploadFile(p2PhotoFile, 'quiz-contest-files', 'photos/participant_photos/');
-const p2SignatureUrl = await uploadFile(p2SignatureFile, 'quiz-contest-files', 'signatures/participant_signatures/');
+const p2SigFile = document.getElementById('p2_signature').files[0];
+const p2SignatureBase64 = p2SigFile ? await fileToBase64(p2SigFile) : null;
 
 
+        const formData = {
+            category: document.querySelector('input[name="category"]:checked').value,
+            examCentre: document.querySelector('input[name="exam_centre"]:checked').value,
+            p1_name: document.getElementById('p1_name').value,
+            p1_class: document.getElementById('p1_class').value,
+            p1_dob: document.getElementById('p1_dob').value,
+            p1_school: document.getElementById('p1_school').value,
+            p1_parent_mob: document.getElementById('p1_parent_mob').value,
+            p1_address: document.getElementById('p1_address').value,
+            p1_photoBase64,
+            p1_signatureBase64,
+            p2_name: document.getElementById('p2_name').value,
+            p2_class: document.getElementById('p2_class').value,
+            p2_dob: document.getElementById('p2_dob').value,
+            p2_school: document.getElementById('p2_school').value,
+            p2_parent_mob: document.getElementById('p2_parent_mob').value,
+            p2_address: document.getElementById('p2_address').value,
+            p2_photoBase64,
+            p2_signatureBase64,
+            lc_p1_name: document.getElementById('lc_p1_name').value,
+            lc_p1_mobile: document.getElementById('lc_p1_mobile').value,
+            lc_p1_fathers_name: document.getElementById('lc_p1_fathers_name').value,
+            lc_p2_name: document.getElementById('lc_p2_name').value,
+            lc_p2_mobile: document.getElementById('lc_p2_mobile').value,
+            lc_p2_fathers_name: document.getElementById('lc_p2_fathers_name').value,
+        };
 
+        // -------- Call backend API --------
+        async function handleSubmit(e) {
+  e.preventDefault();
 
-// To show warning for photo and signature not uploaded
-// document.getElementById("applicationForm").addEventListener("submit", function(e) {
-//   const requiredPhotos = ['p1_photo', 'p1_signature', 'p2_photo', 'p2_signature'];
-//   for (const id of requiredPhotos) {
-//     const input = document.getElementById(id);
-//     if (!input.files || input.files.length === 0) {
-//       alert(`Please upload the file for: ${id.replace(/_/g, ' ')}`);
-//       e.preventDefault();
-//       return;
-//     }
-//   }
-// });
-
-
-
-// Insert/Update application data with "simulated_paid" status
-const { data, error: insertError } = await supabase
-    .from('quiz_applications')
-    .upsert({
-        form_serial_number: currentSerialNumber,
-        category: category,
-        exam_centre: examCentre,
-        p1_name: p1Name,
-        p1_class: p1Class,
-        p1_dob: p1Dob,
-        p1_school: p1School,
-        p1_parent_mob: p1ParentMob,           // ✅ Corrected
-        p1_address: p1Address,
-        p1_photo_url: p1PhotoUrl,
-        p1_signature_url: p1SignatureUrl,
-        p2_name: p2Name,
-        p2_class: p2Class,
-        p2_dob: p2Dob,
-        p2_school: p2School,
-        p2_parent_mob: p2ParentMob,           // ✅ Corrected
-        p2_address: p2Address,
-        p2_photo_url: p2PhotoUrl,
-        p2_signature_url: p2SignatureUrl,
-        lc_p1_name: lcP1Name,
-        lc_p1_mobile: lcP1Mobile,
-        lc_p1_fathers_name: lcP1FathersName,
-        lc_p2_name: lcP2Name,
-        lc_p2_mobile: lcP2Mobile,
-        lc_p2_fathers_name: lcP2FathersName,
-        payment_status: 'simulated_paid',
-        payment_id: 'SIMULATED-' + Date.now(),
-        payment_time: new Date().toISOString(),
-        amount_paid: PAYMENT_AMOUNT_INR
-    }, { onConflict: 'form_serial_number' })
-    .select()
-    .single();
-
-                if (insertError) {
-                    throw new Error(`Error saving application: ${insertError.message}`);
-                }
-
-                displayMessage('Application submitted and payment simulated successfully! Redirecting to receipt...', 'success');
-                console.log('Application saved with serial number:', currentSerialNumber, 'and simulated payment status.');
-
-                // Redirect to receipt.html immediately
-                setTimeout(() => {
-                    window.location.href = `receipt.html?serialNumber=${currentSerialNumber}`;
-                }, 1500); // Give a brief moment for the message to display
-
-            } catch (error) {
-                console.error('Submission failed:', error);
-                displayMessage(`Error: ${error.message}. Please try again.`, 'error');
-                submitButton.disabled = false;
-            }
-        }
-
-        // Event Listeners for file inputs
-        document.getElementById('p1_photo_container').addEventListener('click', () => document.getElementById('p1_photo').click());
-        document.getElementById('p1_photo').addEventListener('change', (e) => handleImagePreview(e, 'p1_photo_preview', 'p1_photo_text'));
-
-        document.getElementById('p1_signature_container').addEventListener('click', () => document.getElementById('p1_signature').click());
-        document.getElementById('p1_signature').addEventListener('change', (e) => handleImagePreview(e, 'p1_signature_preview', 'p1_signature_text'));
-
-        document.getElementById('p2_photo_container').addEventListener('click', () => document.getElementById('p2_photo').click());
-        document.getElementById('p2_photo').addEventListener('change', (e) => handleImagePreview(e, 'p2_photo_preview', 'p2_photo_text'));
-
-        document.getElementById('p2_signature_container').addEventListener('click', () => document.getElementById('p2_signature').click());
-        document.getElementById('p2_signature').addEventListener('change', (e) => handleImagePreview(e, 'p2_signature_preview', 'p2_signature_text'));
-
-        // Main form submission listener
-        document.addEventListener("DOMContentLoaded", () => {
+  
+document.addEventListener("DOMContentLoaded", async () => {
+  const serialDiv = document.getElementById("serialNumberDisplay");
   const form = document.getElementById("applicationForm");
-  if (form) {
-    form.addEventListener("submit", handleSubmit);
+  let currentSerialNumber = null;
+
+  // Fetch serial number for display
+  try {
+    const res = await fetch("/api/submit-quiz"); // GET request
+    const result = await res.json();
+    if(result.success && result.serial_number){
+      currentSerialNumber = result.serial_number;
+      serialDiv.innerText = "Serial: " + currentSerialNumber;
+      serialDiv.style.display = "block";
+    }
+  } catch(err){
+    console.error(err);
   }
-});
 
-        // Initialize Supabase on page load
-        initializeSupabase();
-
-        // Generate and display serial number on page load
-        window.addEventListener('load', async () => {
-            currentSerialNumber = await generateSerialNumber();
-            if (currentSerialNumber) {
-                serialNumberDisplay.textContent = `S. No. ${currentSerialNumber}`;
-            } else {
-                serialNumberDisplay.textContent = 'Error fetching S. No.';
-            }
-        });
-
-
-
-    document.getElementById("applicationForm").addEventListener("submit", function(e){
+  // Form submit
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
-
-    let formData = Object.fromEntries(new FormData(this).entries());
-    sessionStorage.setItem('quizFormData', JSON.stringify(formData));
-
-    var options = {
-        "key": "rzp_test_gNxIJDRvWeuIys",
-        "amount": 30000,
-        "currency": "INR",
-        "name": "MBM Quiz Contest",
-        "description": "Registration Fee",
-        "handler": function (response){
-            window.location.href = "receipt.html?payment_id=" + response.razorpay_payment_id;
-        },
-        "theme": { "color": "#3399cc" }
+    const formData = {
+      name: form.name.value,
+      email: form.email.value,
+      p1_photoBase64: "",
+      p2_photoBase64: "",
+      p1_signatureBase64: "",
+      p2_signatureBase64: "",
+      form_serial_number: currentSerialNumber
     };
 
-    var rzp1 = new Razorpay(options);
-    rzp1.open();
+    try {
+      const res = await fetch("/api/submit-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+      const result = await res.json();
+      if(result.success){
+        alert("Form submitted! Serial: " + currentSerialNumber);
+      } else {
+        alert("Error: " + result.error);
+      }
+    } catch(err){
+      console.error(err);
+    }
+  });
 });
+
+}
+
+        // -------- Trigger Razorpay Payment --------
+        const options = {
+            key: "rzp_test_gNxIJDRvWeuIys",
+            amount: 30000, // ₹300
+            currency: "INR",
+            name: "MBM Quiz Contest",
+            description: "Registration Fee",
+            handler: function (paymentResponse) {
+                window.location.href = `receipt.html?serialNumber=${result.serial_number}&payment_id=${paymentResponse.razorpay_payment_id}`;
+            },
+            theme: { color: "#3399cc" }
+        };
+        const rzp = new Razorpay(options);
+        rzp.open();
+
+    } catch (error) {
+        console.error(error);
+        displayMessage(`Error: ${error.message}`, 'error');
+        submitButton.disabled = false;
+    }
+}
+
+// ---------------- Event Listeners ----------------
+document.getElementById('p1_photo_container').addEventListener('click', () => document.getElementById('p1_photo').click());
+document.getElementById('p1_photo').addEventListener('change', (e) => handleImagePreview(e, 'p1_photo_preview', 'p1_photo_text'));
+
+document.getElementById('p1_signature_container').addEventListener('click', () => document.getElementById('p1_signature').click());
+document.getElementById('p1_signature').addEventListener('change', (e) => handleImagePreview(e, 'p1_signature_preview', 'p1_signature_text'));
+
+document.getElementById('p2_photo_container').addEventListener('click', () => document.getElementById('p2_photo').click());
+document.getElementById('p2_photo').addEventListener('change', (e) => handleImagePreview(e, 'p2_photo_preview', 'p2_photo_text'));
+
+document.getElementById('p2_signature_container').addEventListener('click', () => document.getElementById('p2_signature').click());
+document.getElementById('p2_signature').addEventListener('change', (e) => handleImagePreview(e, 'p2_signature_preview', 'p2_signature_text'));
+
+// Main form listener
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("applicationForm");
+    if (form) {
+        form.addEventListener("submit", handleSubmit);
+    }
+});
+
     </script>
 </body>
 </html>
